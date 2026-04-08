@@ -29,24 +29,25 @@
       <!-- Filters -->
       <section class="lg:col-span-2 rounded-2xl border border-slate-800 bg-slate-900 p-4">
         <h2 class="text-lg font-semibold mb-3">Filters</h2>
-        <form class="grid grid-cols-1 md:grid-cols-5 gap-3 items-end pr-5">
+        <form method="get" action="{{url_for('index')}}" class="grid grid-cols-1 md:grid-cols-5 gap-3 items-end pr-5">
           <label class="text-sm">
             <span class="block mb-1 text-slate-300">Start</span>
-            <input type="date"
+            <input name="start" value="{{start_str or ''}}" type="date"
               class="w-full rounded-xl bg-slate-800 border border-slate-700 px-3 py-2 text-slate-100" />
           </label>
           <label class="text-sm">
             <span class="block mb-1 text-slate-300">End</span>
-            <input type="date"
+            <input name="end" value="{{end_str or ''}}" type="date"
               class="w-full rounded-xl bg-slate-800 border border-slate-700 px-3 py-2 text-slate-100" />
           </label>
           <label class="text-sm md:col-span-2">
             <span class="block mb-1 text-slate-300">Category</span>
-            <select class="w-full rounded-xl bg-slate-800 border border-slate-700 px-3 py-2 text-slate-100">
+            <select name="category"
+              class="w-full rounded-xl bg-slate-800 border border-slate-700 px-3 py-2 text-slate-100">
               <option value="">All</option>
-              <option>Food</option>
-              <option>Transport</option>
-              <option>Utilities</option>
+              {% for c in categories %}
+              <option value="{{c}}" {% if selected_category==c %} selected {% endif %}>{{c}}</option>
+              {% endfor %}
             </select>
           </label>
           <div class="flex gap-2">
@@ -54,7 +55,8 @@
               type="submit">
               Apply
             </button>
-            <a class="rounded-xl bg-slate-800 hover:bg-slate-700 px-4 py-2 border border-slate-700" href="#">Reset</a>
+            <a class="rounded-xl bg-slate-800 hover:bg-slate-700 px-4 py-2 border border-slate-700"
+              href="{{url_for('index')}}">Reset</a>
           </div>
         </form>
 
@@ -62,13 +64,14 @@
         <div class="mt-4 text-sm text-slate-300">
           <span class="mr-2">Total:</span>
           <span class="inline-block rounded-xl border border-slate-700 bg-slate-800 px-3 py-1 font-semibold">
-            $0.00
+            ${{'%.2f'|format(total or 0)}}
           </span>
         </div>
 
         <!-- Export link -->
         <div class="mt-3">
-          <a class="text-xs text-slate-400 hover:text-brand underline" href="#">
+          <a class="text-xs text-slate-400 hover:text-brand underline"
+            href="{{url_for('export_csv', start=start_str, end=end_str, category=selected_category)}}">
             Export CSV (current filter)
           </a>
         </div>
@@ -91,7 +94,7 @@
             </label>
             <label class="block text-sm">
               <span class="mb-1 block text-slate-300">Date</span>
-              <input name="date" type="date"
+              <input name="date" value="{{today}}" type="date"
                 class="w-full rounded-xl bg-slate-800 border border-slate-700 px-3 py-2 text-slate-100" />
             </label>
           </div>
@@ -122,7 +125,7 @@
     <div class="mb-3 mt-6">
       <span class="text-sm text-slate-300 mr-2">Total:</span>
       <span class="inline-block rounded-xl border border-slate-700 bg-slate-800 px-3 py-1 font-semibold">
-        ${{'%2.f'|format(total or 0)}}
+        ${{'%.2f'|format(total or 0)}}
       </span>
     </div>
 
@@ -152,14 +155,25 @@
               <td class="px-4 py-2 text-right">${{'%.2f'|format(e.amount)}}</td>
               <td class="px-4 py-2 text-right">
 
-                <form method='POST' 
-                action="{{url_for('delete', expense_id=e.id)}}"
-                  onsubmit="return confirm('Are you sure you want to delete?')">
-                  <button
-                    class="text-rose-300 hover:text-rose-200 text-xs border border-rose-400/30 px-3 py-1 rounded-lg">
-                    Delete
-                  </button>
-                </form>
+                <div class="inline-flex gap-2">
+                  <a class="text-sky-300
+                  hover: text-sky-200
+                  text-xs
+                  border
+                  border-sky-400/30
+                  px-3
+                  py-1
+                  rounded-lg" href="{{url_for('edit', expense_id=e.id)}}">EDIT</a>
+
+                  <form method='POST' action="{{url_for('delete', expense_id=e.id)}}"
+                    onsubmit="return confirm('Are you sure you want to delete?')">
+                    <button
+                      class="text-rose-300 hover:text-rose-200 text-xs border border-rose-400/30 px-3 py-1 rounded-lg">
+                      Delete
+                    </button>
+                  </form>
+                </div>
+
               </td>
             </tr>
             {% endfor %}
@@ -186,7 +200,42 @@
         <canvas id="dayChart" height="140"></canvas>
       </div>
     </section>
+    <script>
+      const catLabels = {{(cat_labels or[]) | tojson}};
+      const catValues = {{(cat_values or[]) | tojson}};
+      const dayLabels = {{(day_labels or[]) | tojson}};
+      const dayValues = {{(day_values or[]) | tojson}};
+
+      if (document.getElementById('catChart')) {
+        const catCtx = document.getElementById('catChart').getContext('2d');
+
+        new Chart(catCtx, {
+          type: 'pie',
+          data: { labels: catLabels, datasets: [{ data: catValues }] },
+          options: { plugins: { legend: { labels: { color: '#cbd5e1' } } } }
+        });
+      }
+
+      if (document.getElementById('dayChart')) {
+        const dayCtx = document.getElementById('dayChart').getContext('2d');
+
+        new Chart(dayCtx, {
+          type: 'bar',
+          data: { labels: dayLabels, datasets: [{ labels: 'Total', data: dayValues }] },
+          options: {
+            plugins: { legend: { labels: { color: '#334155' } } },
+            scales: {
+              x: { ticks: { color: '#cbd5e1' }, grid: { color: '#334155' } },
+              y: { ticks: { color: '#cbd5e1' }, grid: { color: '#334155' } }
+            }
+          }
+        });
+      }
+
+
+    </script>
   </main>
 </body>
+
 
 </html>
